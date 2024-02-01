@@ -81,7 +81,7 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
 
                 val args = DartCallback(
                     context.assets,
-                    FlutterMain.findAppBundlePath(context)!!,
+                    FlutterMain.findAppBundlePath(),
                     callbackInfo
                 )
                 sBackgroundFlutterEngine!!.dartExecutor.executeDartCallback(args)
