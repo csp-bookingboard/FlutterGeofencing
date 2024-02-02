@@ -3,8 +3,8 @@
 // found in the LICENSE file
 
 #import "GeofencingPlugin.h"
-
 #import <CoreLocation/CoreLocation.h>
+#import "FlutterEngineManager.h"
 
 @implementation GeofencingPlugin {
     CLLocationManager *_locationManager;
@@ -25,6 +25,7 @@ static const NSString *kEventType = @"event_type";
 static const int kEnterEvent = 1;
 static const int kExitEvent = 2;
 static const NSString *kCallbackMapping = @"geofence_region_callback_mapping";
+NSString *const CHANNEL = @"marcolettieri/FlutterGeofencing";
 static FlutterPluginRegistrantCallback registerPlugins = nil;
 static BOOL backgroundIsolateRun = NO;
 #pragma mark FlutterPlugin Methods
