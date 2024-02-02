@@ -3,21 +3,18 @@
 // found in the LICENSE file
 
 #import "GeofencingPlugin.h"
+
 #import <CoreLocation/CoreLocation.h>
-#import "FlutterEngineManager.h"
 
 @implementation GeofencingPlugin {
     CLLocationManager *_locationManager;
     FlutterEngine *_headlessRunner;
     FlutterMethodChannel *_callbackChannel;
     FlutterMethodChannel *_mainChannel;
+    NSObject <FlutterPluginRegistrar> *_registrar;
     NSUserDefaults *_persistentState;
     NSMutableArray *_eventQueue;
     int64_t _onLocationUpdateHandle;
-    FlutterMethodChannel *_channel;
-    bool _initialized;
-    NSObject <FlutterPluginRegistrar> *_registrar;
-    FlutterEngineManager *_flutterEngineManager;
 }
 
 static const NSString *kRegionKey = @"region";
@@ -25,25 +22,15 @@ static const NSString *kEventType = @"event_type";
 static const int kEnterEvent = 1;
 static const int kExitEvent = 2;
 static const NSString *kCallbackMapping = @"geofence_region_callback_mapping";
-NSString *const CHANNEL = @"marcolettieri/FlutterGeofencing";
+static GeofencingPlugin *instance = nil;
 static FlutterPluginRegistrantCallback registerPlugins = nil;
+static BOOL initialized = NO;
 static BOOL backgroundIsolateRun = NO;
 #pragma mark FlutterPlugin Methods
 
 + (void)registerWithRegistrar:(NSObject <FlutterPluginRegistrar> *)registrar {
-    FlutterMethodChannel *channel =
-            [FlutterMethodChannel methodChannelWithName:CHANNEL
-                                        binaryMessenger:[registrar messenger]];
-
-    GeofencingPlugin *instance =
-            [[GeofencingPlugin alloc] initWithChannel:channel
-                                            registrar:registrar];
-
-    if ([FlutterEngineManager shouldAddAppDelegateToRegistrar:registrar]) {
-        [registrar addApplicationDelegate:instance];
-    }
-
-    [registrar addMethodCallDelegate:instance channel:channel];
+    instance = [[GeofencingPlugin alloc] init:registrar];
+    [registrar addApplicationDelegate:instance];
 }
 
 + (void)setPluginRegistrantCallback:(FlutterPluginRegistrantCallback)callback {
@@ -57,19 +44,19 @@ static BOOL backgroundIsolateRun = NO;
                  @"Invalid argument count for 'GeofencingPlugin.initializeService'");
         [self startGeofencingService:[arguments[0] longValue]];
         result(@(YES));
-    } else if ([@"GeofencingService._initialized" isEqualToString:call.method]) {
-        @synchronized (self) {
-            _initialized = YES;
-            // Send the geofence events that occurred while the background
-            // isolate was initializing.
-            while ([_eventQueue count] > 0) {
-                NSDictionary *event = _eventQueue[0];
-                [_eventQueue removeObjectAtIndex:0];
-                CLRegion *region = [event objectForKey:kRegionKey];
-                int type = [[event objectForKey:kEventType] intValue];
-                [self sendLocationEvent:region eventType:type];
-            }
+    } else if ([@"GeofencingService.initialized" isEqualToString:call.method]) {
+
+        initialized = YES;
+        // Send the geofence events that occurred while the background
+        // isolate was initializing.
+        while ([_eventQueue count] > 0) {
+            NSDictionary *event = _eventQueue[0];
+            [_eventQueue removeObjectAtIndex:0];
+            CLRegion *region = [event objectForKey:kRegionKey];
+            int type = [[event objectForKey:kEventType] intValue];
+            [self sendLocationEvent:region eventType:type];
         }
+
         result(nil);
     } else if ([@"GeofencingPlugin.registerGeofence" isEqualToString:call.method]) {
         [self registerGeofence:arguments];
@@ -98,30 +85,27 @@ didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
 #pragma mark LocationManagerDelegate Methods
 
 - (void)locationManager:(CLLocationManager *)manager didEnterRegion:(CLRegion *)region {
-    @synchronized (self) {
-        if (_initialized) {
-            [self sendLocationEvent:region eventType:kEnterEvent];
-        } else {
-            NSDictionary *dict = @{
-                    kRegionKey: region,
-                    kEventType: @(kEnterEvent)
-            };
-            [_eventQueue addObject:dict];
-        }
+
+    if (initialized) {
+        [self sendLocationEvent:region eventType:kEnterEvent];
+    } else {
+        NSDictionary *dict = @{
+                kRegionKey: region,
+                kEventType: @(kEnterEvent)
+        };
+        [_eventQueue addObject:dict];
     }
 }
 
 - (void)locationManager:(CLLocationManager *)manager didExitRegion:(CLRegion *)region {
-    @synchronized (self) {
-        if (_initialized) {
-            [self sendLocationEvent:region eventType:kExitEvent];
-        } else {
-            NSDictionary *dict = @{
-                    kRegionKey: region,
-                    kEventType: @(kExitEvent)
-            };
-            [_eventQueue addObject:dict];
-        }
+    if (initialized) {
+        [self sendLocationEvent:region eventType:kExitEvent];
+    } else {
+        NSDictionary *dict = @{
+                kRegionKey: region,
+                kEventType: @(kExitEvent)
+        };
+        [_eventQueue addObject:dict];
     }
 }
 
